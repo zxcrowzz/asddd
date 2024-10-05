@@ -16,6 +16,15 @@ const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
+const RedisStore = require('connect-redis')(session);
+const redis = require('redis');
+
+// Redis client setup
+const redisClient = redis.createClient({
+    host: process.env.REDIS_HOST,
+    port: process.env.REDIS_PORT,
+});
+redisClient.on('error', (err) => console.error('Redis error:', err));
 
 // Middleware
 app.use(express.static(path.join(__dirname, 'public')));
@@ -48,6 +57,9 @@ function initialize(passport) {
                 return done(null, false, { message: 'No user with that email' });
             }
             if (await bcrypt.compare(password, user.password)) {
+                if (!user.isVerified) {
+                    return done(null, false, { message: 'Email not confirmed' });
+                }
                 return done(null, user);
             } else {
                 return done(null, false, { message: 'Password incorrect' });
@@ -79,10 +91,11 @@ mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTop
 // Session and Flash
 app.use(flash());
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'defaultsecret', // Default for development
+    store: new RedisStore({ client: redisClient }),
+    secret: process.env.SESSION_SECRET || 'defaultsecret',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: process.env.NODE_ENV === 'production' } // Use secure cookies in production
+    cookie: { secure: process.env.NODE_ENV === 'production' }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -164,7 +177,7 @@ app.get('/confirmation/:token', async (req, res) => {
             name: pendingUser.username,
             email: pendingUser.email,
             password: pendingUser.password,
-            isVerified: true // Corrected to match your schema
+            isVerified: true
         });
 
         await newUser.save();
@@ -183,7 +196,7 @@ function generateVerificationCode() {
 }
 
 app.post("/login", (req, res, next) => {
-    console.log("Login attempt:", req.body); // Log the incoming request
+    console.log("Login attempt:", req.body);
     passport.authenticate('local', async (err, user, info) => {
         if (err) {
             console.error("Error during authentication:", err);
@@ -240,17 +253,15 @@ app.get('/', (req, res) => {
 app.get('/home', checkAuthenticated, (req, res) => {
     res.render("index.ejs");
 });
+
 app.post('/redirect', (req, res) => {
-    // Handle the request here
-    // For example, you could redirect to another page:
     res.redirect('/register');
 });
 
 app.post('/redirect1', (req, res) => {
-    // Handle the request here
-    // For example, you could redirect to another page:
     res.redirect('/login');
 });
+
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
