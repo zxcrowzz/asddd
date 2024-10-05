@@ -185,9 +185,16 @@ function generateVerificationCode() {
 }
 
 app.post("/login", (req, res, next) => {
+    console.log("Login attempt:", req.body); // Log the incoming request
     passport.authenticate('local', async (err, user, info) => {
-        if (err) { return next(err); }
-        if (!user) { return res.redirect('/login'); }
+        if (err) {
+            console.error("Error during authentication:", err);
+            return next(err);
+        }
+        if (!user) {
+            console.log("No user found.");
+            return res.redirect('/login');
+        }
 
         req.logIn(user, async (err) => {
             if (err) {
