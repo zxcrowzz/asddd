@@ -1,6 +1,4 @@
-
 require("dotenv").config();
-
 
 const express = require('express');
 const app = express();
@@ -74,17 +72,17 @@ function initialize(passport) {
 initialize(passport);
 
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
     .then(() => console.log('Connected to MongoDB'))
     .catch(err => console.error('MongoDB connection error:', err));
-
 
 // Session and Flash
 app.use(flash());
 app.use(session({
     secret: process.env.SESSION_SECRET || 'defaultsecret', // Default for development
     resave: false,
-    saveUninitialized: false
+    saveUninitialized: false,
+    cookie: { secure: process.env.NODE_ENV === 'production' } // Use secure cookies in production
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -137,7 +135,7 @@ app.post("/register", [
 
         await pendingUser.save();
 
-        const url = `http://localhost:3000/confirmation/${token}`; // Change to production URL later
+        const url = `http://${req.headers.host}/confirmation/${token}`; // Dynamic URL based on host
         await transporter.sendMail({
             to: pendingUser.email,
             subject: 'Confirm Email',
@@ -216,7 +214,7 @@ app.post("/login", (req, res, next) => {
     })(req, res, next);
 });
 
-app.post("/verify", (req, res, next) => {
+app.post("/verify", (req, res) => {
     const { verificationCode } = req.body;
 
     if (req.session.verificationCode === verificationCode) {
@@ -244,6 +242,7 @@ app.get('/home', checkAuthenticated, (req, res) => {
 });
 
 // Start server
-app.listen(3000, () => {
-    console.log('Server is running on port 3000');
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
