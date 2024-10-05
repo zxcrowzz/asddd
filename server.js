@@ -245,6 +245,12 @@ app.post('/redirect', (req, res) => {
     // For example, you could redirect to another page:
     res.redirect('/register');
 });
+
+app.post('/redirect1', (req, res) => {
+    // Handle the request here
+    // For example, you could redirect to another page:
+    res.redirect('/login');
+});
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
