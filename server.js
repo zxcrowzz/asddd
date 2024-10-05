@@ -240,7 +240,11 @@ app.get('/', (req, res) => {
 app.get('/home', checkAuthenticated, (req, res) => {
     res.render("index.ejs");
 });
-
+app.post('/redirect', (req, res) => {
+    // Handle the request here
+    // For example, you could redirect to another page:
+    res.redirect('/register');
+});
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
