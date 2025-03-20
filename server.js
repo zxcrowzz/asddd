@@ -17,14 +17,9 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const RedisStore = require('connect-redis')(session);
-const redis = require('redis');
+const { createClient } = require('redis');
 
 // Redis client setup
-const redisClient = redis.createClient({
-    host: process.env.REDIS_HOST,
-    port: process.env.REDIS_PORT,
-});
-redisClient.on('error', (err) => console.error('Redis error:', err));
 
 // Middleware
 app.use(express.static(path.join(__dirname, 'public')));
@@ -91,7 +86,7 @@ mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTop
 // Session and Flash
 app.use(flash());
 app.use(session({
-    store: new RedisStore({ client: redisClient }),
+   
     secret: process.env.SESSION_SECRET || 'defaultsecret',
     resave: false,
     saveUninitialized: false,
@@ -101,156 +96,18 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // Authentication Middleware
-function checkAuthenticated(req, res, next) {
-    if (req.isAuthenticated()) {
-        return next();
-    }
-    res.redirect('/login');
-}
 
-function checkNotAuthenticated(req, res, next) {
-    if (req.isAuthenticated()) {
-        return res.redirect('/home');
-    }
-    next();
-}
 
-// Routes
-app.get('/register', checkNotAuthenticated, (req, res) => {
-    res.render("register.ejs");
-});
-
-app.post("/register", [
-    body('username').notEmpty().withMessage('Username is required'),
-    body('email').isEmail().withMessage('Enter a valid email'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
-], async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-    }
-
-    try {
-        const existingUser = await User.findOne({ email: req.body.email });
-        if (existingUser) {
-            return res.status(400).json({ error: 'Email already exists' });
-        }
-
-        const hashedPassword = await bcrypt.hash(req.body.password, 10);
-        const token = jwt.sign({ email: req.body.email }, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-        const pendingUser = new PendingUser({
-            username: req.body.username,
-            email: req.body.email,
-            password: hashedPassword,
-            token
-        });
-
-        await pendingUser.save();
-
-        const url = `http://${req.headers.host}/confirmation/${token}`; // Dynamic URL based on host
-        await transporter.sendMail({
-            to: pendingUser.email,
-            subject: 'Confirm Email',
-            html: `Click <a href="${url}">here</a> to confirm your email.`,
-        });
-
-        res.status(201).send('User registered. Please check your email to confirm.');
-
-    } catch (e) {
-        console.log(e);
-        res.status(500).send('Server error');
-    }
-});
-
-app.get('/confirmation/:token', async (req, res) => {
-    try {
-        const token = req.params.token;
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const pendingUser = await PendingUser.findOne({ email: decoded.email, token });
-
-        if (!pendingUser) {
-            return res.status(400).send('Invalid token or user does not exist');
-        }
-
-        const newUser = new User({
-            name: pendingUser.username,
-            email: pendingUser.email,
-            password: pendingUser.password,
-            isVerified: true
-        });
-
-        await newUser.save();
-        await PendingUser.deleteOne({ email: pendingUser.email });
-
-        res.send('Email confirmed. You can now log in.');
-
-    } catch (e) {
-        console.log(e);
-        res.status(500).send('Server error');
-    }
-});
-
-function generateVerificationCode() {
-    return crypto.randomBytes(3).toString('hex');
-}
-
-app.post("/login", (req, res, next) => {
-    console.log("Login attempt:", req.body);
-    passport.authenticate('local', async (err, user, info) => {
-        if (err) {
-            console.error("Error during authentication:", err);
-            return next(err);
-        }
-        if (!user) {
-            console.log("No user found.");
-            return res.redirect('/login');
-        }
-
-        req.logIn(user, async (err) => {
-            if (err) {
-                console.error("Login error:", err);
-                return next(err);
-            }
-
-            const verificationCode = generateVerificationCode();
-            await transporter.sendMail({
-                to: user.email,
-                subject: 'Your Verification Code',
-                html: `Your verification code is: ${verificationCode}`
-            });
-
-            req.session.verificationCode = verificationCode;
-
-            return res.render('verify', { message: 'Enter the verification code sent to your email.' });
-        });
-    })(req, res, next);
-});
-
-app.post("/verify", (req, res) => {
-    const { verificationCode } = req.body;
-
-    if (req.session.verificationCode === verificationCode) {
-        delete req.session.verificationCode;
-        return res.redirect('/home');
-    } else {
-        return res.render('verify', { message: 'Invalid verification code. Please try again.' });
-    }
-});
-
-app.get('/login', checkNotAuthenticated, (req, res) => {
-    res.render("login.ejs");
-});
 
 app.get('/', (req, res) => {
-    if (req.isAuthenticated()) {
+   
         res.redirect('/home');
-    } else {
-        res.redirect('/login');
-    }
+
+     
+  
 });
 
-app.get('/home', checkAuthenticated, (req, res) => {
+app.get('/home', (req, res) => {
     res.render("index.ejs");
 });
 
